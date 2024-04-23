@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "Keyframe.hpp"
 #include <stdio.h>
 
@@ -27,9 +26,9 @@ int Keyframe::toString(char* buffer, int bufferSize) const
 {
 	int written = 0;
 
-	written += sprintf_s(buffer, bufferSize, "time: %0.2f, method: %d, sample: {", time, method);
+	written += sprintf(buffer, "time: %0.2f, method: %d, sample: {", time, method);
 	written += sample.toString(buffer + written, bufferSize - written);
-	written += sprintf_s(buffer + written, bufferSize - written, "}");
+	written += sprintf(buffer + written, "}");
 
 	return written;
 }

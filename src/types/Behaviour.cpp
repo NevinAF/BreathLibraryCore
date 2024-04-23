@@ -1,21 +1,20 @@
-#include "pch.h"
 
 #include "Behaviour.hpp"
-#include "..\serialization\EnumDefinitions.hpp"
+#include "..\debugging\DebugCallbacks.hpp"
 
-void Behaviour::addParameterDefinition(SerializedTypes::ClassDefinition *definition)
+void Behaviour::addParameterDefinition(ClassDefinition *definition)
 {
 	definition->addEnumDefinition(
 		"Sampling Mode",
 		"The type of sample that this sampler will produce.",
 		(UInt8)UpdateMode::Default,
 		Behaviour_UpdateMode_serializedIndex,
-		SerializedTypes::PAR_ReadOnlyWhilePlaying);
+		ParameterFlags::PAR_ReadOnlyWhilePlaying);
 }
 
-void Behaviour::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void Behaviour::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	SetEnum(updateMode);
+	serializable_SetEnum(updateMode);
 }
 
 void Behaviour::initialize()
@@ -27,7 +26,12 @@ void Behaviour::initialize()
 	}
 }
 
-void Behaviour::update(float delta) {}
+Behaviour::~Behaviour()
+{
+}
+
+void Behaviour::update(float delta) {
+}
 
 void Behaviour::demandUpdate()
 {

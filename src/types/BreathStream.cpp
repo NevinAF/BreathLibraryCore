@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "BreathStream.hpp"
 #include "..\debugging\DebugCallbacks.hpp"
 
@@ -7,6 +6,12 @@ CreateSerializable(BreathStream);
 BreathStream::BreathStream(UInt16 capacity)
 {
 	this->capacity = capacity;
+
+	initialize();
+}
+
+void BreathStream::initialize()
+{
 	this->pushIndex = 0;
 	this->totalSamples = 0;
 	this->samples = new BreathSample[capacity];
@@ -44,7 +49,7 @@ BreathSample* BreathStream::getSamplesAt(int index)
 		return nullptr;
 	}
 
-	int indexToGet = pushIndex - index;
+	int indexToGet = pushIndex - index - 1;
 	if (indexToGet < 0)
 	{
 		indexToGet += capacity;
@@ -61,7 +66,7 @@ BreathSample* BreathStream::getLatestSample()
 
 void BreathStream::update(float delta)
 {
-	samples[pushIndex] = sampler.get()->getSample();
+	samples[pushIndex] = sampler.Sample();
 	pushIndex++;
 	totalSamples++;
 	if (pushIndex >= capacity)
@@ -70,7 +75,7 @@ void BreathStream::update(float delta)
 	}
 }
 
-BreathSample BreathStream::getSample()
+BreathSample BreathStream::Sample()
 {
 	demandUpdate();
 	return *getLatestSample();
@@ -83,7 +88,7 @@ void BreathStream::addParameterDefinition(ClassDefinition *definition)
 	definition->addReferenceDefinition(
 		"Sampler",
 		"The sampler that this stream will sample from.",
-		SerializedTypes::REF_Sampler);
+		ReferenceType::REF_Sampler);
 
 	definition->addIntDefinition(
 		"Capacity",
@@ -91,15 +96,15 @@ void BreathStream::addParameterDefinition(ClassDefinition *definition)
 		100,
 		1,
 		MAXED_SINT32,
-		SerializedTypes::PAR_ReadOnlyWhilePlaying);
+		ParameterFlags::PAR_ReadOnlyWhilePlaying);
 }
 
-void BreathStream::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void BreathStream::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	Behaviour::setParameterIndex(paramIndex, data, references);
+	Behaviour::setParameterIndex(paramIndex, savedData, runtimeData);
 
-	SetReference(sampler);
-	SetInt(capacity);
+	serializable_SetReference(sampler);
+	serializable_SetInt(capacity);
 }
 
 // DetectorController::DetectorController(int detectorCapacity)

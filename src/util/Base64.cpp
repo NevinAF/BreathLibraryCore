@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "Base64.hpp"
 #include "..\debugging\DebugCallbacks.hpp"
 #include <string>
@@ -91,10 +90,10 @@ UInt32 Base64::decode(char* encoded_string, size_t encoded_size, unsigned char*&
 	{
 		// Get values for each group of four base 64 characters
 		unsigned char b4[4];
-		b4[0] = (encoded_string[i+0] <= 'z') ? from_base64[encoded_string[i+0]] : 0xff;
-		b4[1] = (encoded_string[i+1] <= 'z') ? from_base64[encoded_string[i+1]] : 0xff;
-		b4[2] = (encoded_string[i+2] <= 'z') ? from_base64[encoded_string[i+2]] : 0xff;
-		b4[3] = (encoded_string[i+3] <= 'z') ? from_base64[encoded_string[i+3]] : 0xff;
+		b4[0] = (encoded_string[i+0] <= 'z') ? from_base64[(unsigned char)encoded_string[i+0]] : 0xff;
+		b4[1] = (encoded_string[i+1] <= 'z') ? from_base64[(unsigned char)encoded_string[i+1]] : 0xff;
+		b4[2] = (encoded_string[i+2] <= 'z') ? from_base64[(unsigned char)encoded_string[i+2]] : 0xff;
+		b4[3] = (encoded_string[i+3] <= 'z') ? from_base64[(unsigned char)encoded_string[i+3]] : 0xff;
 
 		// Transform into a group of three unsigned chars
 		unsigned char b3[3];

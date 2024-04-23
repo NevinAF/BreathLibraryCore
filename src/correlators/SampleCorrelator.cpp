@@ -1,23 +1,25 @@
-#include "pch.h"
 
 #include "SampleCorrelator.hpp"
+#include "..\debugging\DebugCallbacks.hpp"
 
 CreateSerializable(SampleCorrelator);
 
-float SampleCorrelator::getCorrelation()
+float SampleCorrelator::Correlation()
 {
-	return BreathSample::Likeness(sampler_a.get()->getSample(), sampler_b.get()->getSample());
+	return BreathSample::Likeness(
+		sampler_a.Sample(),
+		sampler_b.Sample());
 }
 
-void SampleCorrelator::addParameterDefinition(SerializedTypes::ClassDefinition *definition)
+void SampleCorrelator::addParameterDefinition(ClassDefinition *definition)
 {
-	definition->addReferenceDefinition("Sampler A", "One of the samplers (object that has breath samples).", SerializedTypes::REF_Sampler);
+	definition->addReferenceDefinition("Sampler A", "One of the samplers (object that has breath samples).", ReferenceType::REF_Sampler);
 
-	definition->addReferenceDefinition("Sampler B", "One of the samplers (object that has breath samples).", SerializedTypes::REF_Sampler);
+	definition->addReferenceDefinition("Sampler B", "One of the samplers (object that has breath samples).", ReferenceType::REF_Sampler);
 }
 
-void SampleCorrelator::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void SampleCorrelator::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	SetReference(sampler_a);
-	SetReference(sampler_b);
+	serializable_SetReference(sampler_a);
+	serializable_SetReference(sampler_b);
 }

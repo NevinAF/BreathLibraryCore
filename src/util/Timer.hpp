@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TIMER_H
+#define TIMER_H
 
 #include <vector>
 
@@ -8,6 +9,7 @@ namespace Timer
 	extern const unsigned long DWORD_DEFAULT_UPDATE_PERIOD;
 
 	double getTime();
+	unsigned long long getUnixSeconds();
 
 	typedef void(*UpdateFunction)(float);
 
@@ -20,3 +22,5 @@ namespace Timer
 	void beginUpdateCycle(unsigned long updatePeriod);
 	void endUpdateCycle();
 }
+
+#endif // TIMER_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef KEYFRAME_H
+#define KEYFRAME_H
 
 #include "BreathSample.hpp"
 #include "..\util\interpolators.hpp"
@@ -17,3 +18,5 @@ struct Keyframe
 
 	int toString(char *buffer, int bufferSize) const;
 };
+
+#endif

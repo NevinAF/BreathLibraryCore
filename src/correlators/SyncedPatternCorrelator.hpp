@@ -1,13 +1,15 @@
+#ifndef SYNCEDPATTERNCORRELATOR_H
+#define SYNCEDPATTERNCORRELATOR_H
+
 #include "..\types\BreathSample.hpp"
 #include "..\types\SimpleInterfaces.hpp"
 #include "..\types\Pattern.hpp"
 #include "..\types\Behaviour.hpp"
 #include "..\serialization\Serializable.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\serialization\ReferenceManager.hpp"
 
 
-class SyncedPatternCorrelator : public ICorrelator, public IBreathSampler, public Serializable, Behaviour
+class SyncedPatternCorrelator : public Behaviour, public ICorrelator, public IBreathSampler
 {
 private:
 	enum class ProgressMode
@@ -20,11 +22,10 @@ private:
 		__LENGTH__
 	};
 
-	Ref<IBreathSampler> sampler_ref{};
-	Ref<Pattern> pattern_ref{};
+	SamplerRef sampler{};
+	PatternRef pattern_ref{};
 
 	Pattern* pattern{nullptr};
-	IBreathSampler* sampler{nullptr};
 
 	ProgressMode progressMode{ProgressMode::Constant};
 
@@ -38,7 +39,6 @@ private:
 	BreathSample comparingSample;
 	float comparingCorrelation{0};
 
-	float lastCompareSampleTime{-1};
 	void setComparingSample(const BreathSample& samplerSample, float delta);
 	void setPatternTimeByMode(float delta);
 
@@ -48,18 +48,19 @@ private:
 
 protected:
 	void update(float delta) override;
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 public:
 	SerializableProperties(
 		SyncedPatternCorrelator,
-		SyncedPatternCorrelator_serializedIndex,
 		"Synced Pattern Correlator",
 		"Uses a breath pattern to correlate with a breath sampler. The progression of the pattern will depend on the sampler's output.",
-		SerializedTypes::REF_Correlator)
+		ReferenceType::REF_Sampler | ReferenceType::REF_Correlator | ReferenceType::REF_Behaviour)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
-	float getCorrelation() override;
-	BreathSample getSample() override;
+	float Correlation() override;
+	BreathSample Sample() override;
 };
+
+#endif // SYNCEDPATTERNCORRELATOR_H

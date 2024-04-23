@@ -1,8 +1,4 @@
 // BreathLibraryCore.cpp : Defines the exported functions for the DLL.
-//
-
-#include "pch.h"
-#include "framework.h"
 #include "BreathLibraryCore.hpp"
 
 extern "C" BREATHLIBRARYCORE_API void EXTERNAL_CALLING_CONVENTION DebugPrintLoadedPlatform()
@@ -28,4 +24,23 @@ extern "C" BREATHLIBRARYCORE_API void EXTERNAL_CALLING_CONVENTION DebugPrintLoad
 		"Breath Library Core: Loaded for unknown platform"
 #endif
 	);
+}
+
+extern "C" BREATHLIBRARYCORE_API void EXTERNAL_CALLING_CONVENTION OnRuntimeInitialized()
+{
+	// EDebug::Log("Breath Library Core: OnRuntimeInitialized");
+
+	ReferenceManager::OnRuntimeInitialized();
+}
+
+extern "C" BREATHLIBRARYCORE_API void EXTERNAL_CALLING_CONVENTION OnApplicationQuit()
+{
+	// EDebug::Log("Breath Library Core: OnApplicationQuit");
+
+	ReferenceManager::OnApplicationQuit();
+}
+
+extern "C" BREATHLIBRARYCORE_API void EXTERNAL_CALLING_CONVENTION OnApplicationSuspension()
+{
+	// EDebug::Log("Breath Library Core: OnApplicationSuspension");
 }

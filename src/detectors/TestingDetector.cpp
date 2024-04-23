@@ -1,22 +1,18 @@
-#include "pch.h"
 #include "TestingDetector.hpp"
-
-using namespace SerializedTypes;
+#include "..\debugging\DebugCallbacks.hpp"
 
 CreateSerializable(TestingDetector);
 
 void TestingDetector::update(float delta)
 {
-	float _time = currentTime;
-
 	currentTime += delta;
 	if (currentTime > 1.0f) currentTime -= 1.0f;
 }
 
-BreathSample TestingDetector::getSample()
+BreathSample TestingDetector::Sample()
 {
 	demandUpdate();
-	return BreathSample(currentTime, 0.5f, currentTime - 1, 0.0f, (currentTime / 2) -1);
+	return BreathSample(currentTime, 0.5f, currentTime - 1, 0.2f, (currentTime / 2));
 }
 
 void TestingDetector::addParameterDefinition(ClassDefinition *definition)
@@ -26,9 +22,9 @@ void TestingDetector::addParameterDefinition(ClassDefinition *definition)
 	definition->addFloatDefinition("Start Time|Current Time", "Normalized time of the testing detector", 0.0f, 0.0f, 1.0f);
 }
 
-void TestingDetector::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void TestingDetector::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	Behaviour::setParameterIndex(paramIndex, data, references);
+	Behaviour::setParameterIndex(paramIndex, savedData, runtimeData);
 
-	SetFloat(currentTime);
+	serializable_SetFloat(currentTime);
 }

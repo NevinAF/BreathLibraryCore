@@ -98,6 +98,10 @@ struct GenericMember {
     \see GenericMember, GenericValue::MemberIterator, GenericValue::ConstMemberIterator
  */
 template <bool Const, typename Encoding, typename Allocator>
+
+#if PLATFORM_WIN == 1
+#pragma warning( disable: 4996)
+#endif
 class GenericMemberIterator
     : public std::iterator<std::random_access_iterator_tag
         , typename internal::MaybeAddConst<Const,GenericMember<Encoding,Allocator> >::Type> {
@@ -192,6 +196,9 @@ private:
 
     Pointer ptr_; //!< raw pointer
 };
+#if PLATFORM_WIN == 1
+#pragma warning( default: 4996)
+#endif
 
 #else // RAPIDJSON_NOMEMBERITERATORCLASS
 
@@ -955,14 +962,14 @@ public:
             uint64_t u = GetUint64();
             volatile double d = static_cast<double>(u);
             return (d >= 0.0)
-                && (d < static_cast<double>(0xffffffffffffffffui64))
+                && (d < static_cast<double>(0xffffffffffffffffULL))
                 && (u == static_cast<uint64_t>(d));
         }
         if (IsInt64()) {
             int64_t i = GetInt64();
             volatile double d = static_cast<double>(i);
-            return (d >= static_cast<double>(-9223372036854775807i64 - 1))
-                && (d < static_cast<double>(9223372036854775807i64))
+            return (d >= static_cast<double>(-9223372036854775807LL - 1))
+                && (d < static_cast<double>(9223372036854775807LL))
                 && (i == static_cast<int64_t>(d));
         }
         return true; // double, int, uint are always lossless

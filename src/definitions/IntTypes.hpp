@@ -1,3 +1,6 @@
+#ifndef INTTYPES_HPP
+#define INTTYPES_HPP
+
 #ifndef SInt16_defined
 #   define SInt16_defined
 typedef signed short SInt16;
@@ -106,3 +109,5 @@ typedef unsigned long long UInt64;
 typedef signed long long SInt64;
 #       endif
 #endif
+
+#endif // INTTYPES_HPP

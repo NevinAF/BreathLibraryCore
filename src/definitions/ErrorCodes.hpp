@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ERRORCODES_H
+#define ERRORCODES_H
 
 enum ErrorCodes
 {
@@ -12,3 +13,5 @@ enum ErrorCodes
 	IndexIsOutOfBounds = 7,
 	// ...
 };
+
+#endif

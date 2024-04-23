@@ -1,28 +1,29 @@
-#pragma once
+#ifndef SAMPLECORRELATOR_H
+#define SAMPLECORRELATOR_H
 
 #include "..\serialization\Serializable.hpp"
 #include "..\types\SimpleInterfaces.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\serialization\ReferenceManager.hpp"
 
-class SampleCorrelator : public ICorrelator, public Serializable
+class SampleCorrelator : public Serializable, public ICorrelator
 {
 private:
-	Ref<IBreathSampler> sampler_a{};
-	Ref<IBreathSampler> sampler_b{};
+	SamplerRef sampler_a{};
+	SamplerRef sampler_b{};
 
 protected:
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 public:
 	SerializableProperties(
 		SampleCorrelator,
-		SampleCorrelator_serializedIndex,
 		"Sample Correlator",
 		"Returns the correlation between two samplers. If the samples are close to each other, the correlation will be high.",
-		SerializedTypes::REF_Correlator)
+		ReferenceType::REF_Correlator)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
-	float getCorrelation() override;
+	float Correlation() override;
 };
+
+#endif // SAMPLECORRELATOR_H

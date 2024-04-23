@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "BreathSample.hpp"
 #include <stdio.h>
 #include <math.h>
@@ -130,7 +129,8 @@ bool BreathSample::operator==(const BreathSample& other) const
 
 int BreathSample::toString(char* buffer, int bufferSize) const
 {
-	return sprintf_s(buffer, bufferSize, "yes: %0.2f, in: %0.2f, nasal: %0.2f, volume: %0.2f, pitch: %0.2f", yes, in, nasal, volume, pitch);
+	ASSERT_MSG(bufferSize >= 65,-1, "Buffer size too small to use BreathSample::toString()", 0);
+	return sprintf(buffer, "yes: %0.2f, in: %0.2f, nasal: %0.2f, volume: %0.2f, pitch: %0.2f", yes, in, nasal, volume, pitch);
 }
 
 
@@ -191,13 +191,6 @@ float BreathSample::Likeness(const BreathSample& a, const BreathSample& b)
 		}
 	}
 
-	if (count == 0)
-	{
-		EDebug::Warning("BreathSample::Likeness: No values to compare");
-
-		return 0.0f;
-	}
-
 	// The "no" value is a special case where non of the other values will matter.
 
 	float noScalar = 1.0f;
@@ -207,8 +200,18 @@ float BreathSample::Likeness(const BreathSample& a, const BreathSample& b)
 		noScalar = a.getYes() * b.getYes();
 		noDiff = fabsf(a.getNo() - b.getNo());
 	}
+	else if (count == 0)
+	{
+		EDebug::Warning("BreathSample::Likeness: No values to compare: a-> {yes: %0.2f, in: %0.2f, nasal: %0.2f, volume: %0.2f, pitch: %0.2f}, b-> {yes: %0.2f, in: %0.2f, nasal: %0.2f, volume: %0.2f, pitch: %0.2f}", a.yes, a.in, a.nasal, a.volume, a.pitch, b.yes, b.in, b.nasal, b.volume, b.pitch);
 
-	return 1.0f - (sqrtf(sum / count) * noScalar + noDiff * (1.0f - noScalar));
+		return 0.0f;
+	}
+	else if (a.hasNo()) noScalar = a.getYes();
+	else if (b.hasNo()) noScalar = b.getYes();
+
+	float RMSE = (count == 0) ? 0.0f : sqrtf(sum / count);
+
+	return 1.0f - (RMSE * noScalar + noDiff * (1.0f - noScalar));
 }
 
 BreathSample BreathSample::ClosestValues_val(const BreathSample& a, const BreathSample* samples, int size)
@@ -299,4 +302,11 @@ BreathSample BreathSample::ClosestValues_ptr(const BreathSample& a, const Breath
 	}
 
 	return result;
+}
+
+float BreathSample::ClosedValue(float value, float min, float max) const
+{
+	if (value < min) return min;
+	else if (value > max) return max;
+	else return value;
 }

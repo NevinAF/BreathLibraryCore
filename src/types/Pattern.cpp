@@ -1,14 +1,10 @@
-#include "pch.h"
 
 #include "Pattern.hpp"
 #include "Keyframe.hpp"
 #include "..\debugging\DebugCallbacks.hpp"
 #include "..\rapidjson\document.h"
 
-Serializable *Pattern::create()
-{
-	return new Pattern();
-}
+CreateSerializable(Pattern);
 
 Pattern::Pattern(char *name, float length, Keyframe *keyframes, int numKeyframes)
 {
@@ -17,28 +13,61 @@ Pattern::Pattern(char *name, float length, Keyframe *keyframes, int numKeyframes
 	this->keyframes = keyframes;
 	this->numKeyframes = numKeyframes;
 
-	orderKeyframes();
-	applyHoldValues();
+	initialize();
 }
 
-void Pattern::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void Pattern::initialize()
 {
-	char *json;
-	SetString(json);
+	ASSERT(name != nullptr, );
+	ASSERT(length > 0, );
+	ASSERT(keyframes != nullptr, );
+	ASSERT(numKeyframes > 0, );
 
-	this->clear();
-	this->setFromJson(json);
+	orderKeyframes();
+	applyHoldValues();
+	calculatePerDataKeyframes();
+
+	// EDebug::Log("Pattern::setParameterIndex() - name: %s, length: %f, numKeyframes: %d", name, length, numKeyframes);
+	// for (int i = 0; i < numKeyframes; i++)
+	// {
+	// 	EDebug::Log("\tkeyframe %d: time: %f, target: {Yes: %f, In: %f, Nasal: %f, Volume: %f, Pitch: %f}", i, keyframes[i].time, keyframes[i].sample.yes, keyframes[i].sample.in, keyframes[i].sample.nasal, keyframes[i].sample.volume, keyframes[i].sample.pitch);
+	// }
+}
+
+void Pattern::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
+{
+	if (paramIndex-- == 0)
+	{
+		unsigned char *json = nullptr;
+		UInt32 jsonLength = 0;
+		Serializable::setArray_RuntimeBytes(json, jsonLength, runtimeData);
+
+		if (json != nullptr)
+		{
+			char *jsonString = new char[jsonLength + 1];
+			memcpy(jsonString, json, jsonLength);
+			jsonString[jsonLength] = '\0';
+
+			setFromJson(jsonString);
+
+			delete[] jsonString;
+			delete[] json;
+		}
+
+	}
 }
 
 void Pattern::addParameterDefinition(ClassDefinition *definition)
 {
-	definition->addStringDefinition(
-		"PatternJSON",
-		"JSON string which defines the pattern",
-		"{name: \"Test Pattern\", length: 10, keyframes: [{time: 0, target: {In: 0.5}}]}",
+	definition->addFileDefinition(
+		"Pattern JSON",
+		"JSON file which defines the pattern",
+		"json",
 		PAR_ReadOnlyWhilePlaying
 	);
 }
+
+
 
 void Pattern::clear()
 {
@@ -64,6 +93,15 @@ void Pattern::clear()
 	numKeyframes = 0;
 }
 
+#define BREATH_SAMPLE_SETTER(name)                                                                                                                         \
+	if (sample_value.HasMember(#name))                                                                                                                     \
+	{                                                                                                                                                      \
+		ASSERT_MSG(sample_value[#name].IsNumber(), , "JSON file contains an invalid keyframe: '" #name "' value is not a number.");                        \
+		float value = sample_value[#name].GetFloat();                                                                                                      \
+		ASSERT_MSG(value <= 1.0f && value >= 0.0f, , "JSON file contains an invalid keyframe: '" #name "' is not between 0 and 1 inclusive (%f).", value); \
+		sample.set##name(value);                                                                                                                           \
+	}
+
 void Pattern::setFromJson(const char *jsonString)
 {
 	rapidjson::Document document;
@@ -77,24 +115,24 @@ void Pattern::setFromJson(const char *jsonString)
 
 	if (!document.HasMember("name") || !document["name"].IsString())
 	{
-		EDebug::Error("JSON file does not contain a valid name");
+		EDebug::Error("JSON file does not contain a valid 'name' value.");
 		return;
 	}
 
-	if (!document.HasMember("length") || !document["length"].IsFloat())
+	if (!document.HasMember("length") || !document["length"].IsNumber())
 	{
-		EDebug::Error("JSON file does not contain a valid length");
+		EDebug::Error("JSON file does not contain a valid 'length' value.");
 		return;
 	}
 
 	if (!document.HasMember("keyframes") || !document["keyframes"].IsArray())
 	{
-		EDebug::Error("JSON file does not contain any keyframes");
+		EDebug::Error("JSON file does not contain valid 'keyframes' values.");
 		return;
 	}
 
 	name = new char[document["name"].GetStringLength() + 1];
-	strcpy_s(name, document["name"].GetStringLength() + 1, document["name"].GetString());
+	strcpy(name, document["name"].GetString());
 
 	length = document["length"].GetFloat();
 
@@ -105,9 +143,21 @@ void Pattern::setFromJson(const char *jsonString)
 	for (rapidjson::Value::ConstValueIterator itr = keyframesArray.Begin(); itr != keyframesArray.End(); ++itr)
 	{
 
-		if (!itr->HasMember("time") || !itr->HasMember("sample"))
+		if (!itr->HasMember("time") || !itr->HasMember("target"))
 		{
-			EDebug::Error("JSON file contains an invalid keyframe");
+			EDebug::Error("JSON file contains an invalid keyframe: one that does not contain both a 'time' and 'target' value.");
+			return;
+		}
+
+		if (!(*itr)["time"].IsNumber())
+		{
+			EDebug::Error("JSON file contains an invalid keyframe: 'time' value is not a number.");
+			return;
+		}
+
+		if (!(*itr)["target"].IsObject())
+		{
+			EDebug::Error("JSON file contains an invalid keyframe: 'target' value is not an object.");
 			return;
 		}
 
@@ -116,26 +166,51 @@ void Pattern::setFromJson(const char *jsonString)
 
 		if (itr->HasMember("transition"))
 		{
-			int transition = (*itr)["transition"].GetInt();
+			if ((*itr)["transition"].IsString())
+			{
+				if (!Interpolators::tryParseMethod((*itr)["transition"].GetString(), method))
+				{
+					EDebug::Error("JSON file contains an invalid keyframe: 'transition' value is not a valid interpolation method: %s.", (*itr)["transition"].GetString());
+					return;
+				}
+			}
+			else if ((*itr)["transition"].IsInt())
+			{
+				int transition = (*itr)["transition"].GetInt();
 
-			if (transition == -1)
-				method = Interpolators::Hold;
+				if (transition == -1)
+					method = Interpolators::Hold;
+				else
+					method = (Interpolators::Method)transition;
+			}
 			else
-				method = (Interpolators::Method)transition;
+			{
+				EDebug::Error("JSON file contains an invalid keyframe: 'transition' value is not a string or integer.");
+				return;
+			}
 		}
 
 		BreathSample sample = BreathSample(-1, -1, -1, -1, -1);
 
-		const rapidjson::Value &sample_value = (*itr)["sample"];
+		const rapidjson::Value &sample_value = (*itr)["target"];
 
-		if (sample_value.HasMember("No")) sample.setNo(sample_value["No"].GetFloat());
-		if (sample_value.HasMember("Yes")) sample.setYes(sample_value["Yes"].GetFloat());
-		if (sample_value.HasMember("In")) sample.setIn(sample_value["In"].GetFloat());
-		if (sample_value.HasMember("Out")) sample.setOut(sample_value["Out"].GetFloat());
-		if (sample_value.HasMember("Nasal")) sample.setNasal(sample_value["Nasal"].GetFloat());
-		if (sample_value.HasMember("Mouth")) sample.setMouth(sample_value["Mouth"].GetFloat());
-		if (sample_value.HasMember("Pitch")) sample.setPitch(sample_value["Pitch"].GetFloat());
-		if (sample_value.HasMember("Volume")) sample.setVolume(sample_value["Volume"].GetFloat());
+		BREATH_SAMPLE_SETTER(No)
+		BREATH_SAMPLE_SETTER(Yes)
+		BREATH_SAMPLE_SETTER(In)
+		BREATH_SAMPLE_SETTER(Out)
+		BREATH_SAMPLE_SETTER(Nasal)
+		BREATH_SAMPLE_SETTER(Mouth)
+		BREATH_SAMPLE_SETTER(Pitch)
+		BREATH_SAMPLE_SETTER(Volume)
+
+		if (sample_value.HasMember("No") && sample_value.HasMember("Yes"))
+			EDebug::Warning("JSON file keyframe has both 'No' and 'Yes' values set, which will result in the 'no' value being ignored.");
+
+		if (sample_value.HasMember("In") && sample_value.HasMember("Out"))
+			EDebug::Warning("JSON file keyframe has both 'In' and 'Out' values set, which will result in the 'In' value being ignored.");
+
+		if (sample_value.HasMember("Nasal") && sample_value.HasMember("Mouth"))
+			EDebug::Warning("JSON file keyframe has both 'Nasal' and 'Mouth' values set, which will result in the 'Nasal' value being ignored.");
 
 		keyframes[itr - keyframesArray.Begin()] = Keyframe(sample, time, method);
 	}
@@ -144,7 +219,7 @@ void Pattern::setFromJson(const char *jsonString)
 
 Pattern::~Pattern()
 {
-	delete[] keyframes;
+	clear();
 }
 
 char *Pattern::getName() const
@@ -185,7 +260,8 @@ const BreathSample* *Pattern::getSamples()
 
 bool Pattern::isValid() const
 {
-	return numKeyframes > 0 && keyframes != nullptr && length > 0.0f;
+	return numKeyframes > 0 && keyframes != nullptr && length > 0.0f &&
+		   perData_keyframes != nullptr && perData_start != nullptr;
 }
 
 float Pattern::toAbsoluteTime(float normTime) const
@@ -195,185 +271,183 @@ float Pattern::toAbsoluteTime(float normTime) const
 
 float Pattern::toNormalizedTime(float absoluteTime) const
 {
+	ASSERT(length != 0, 0.0f);
 	return absoluteTime / length;
 }
 
-int Pattern::getKeyframeIndex(float normTime) const
+int Pattern::getKeyframeIndexAtTime(float normTime) const
 {
 	ASSERT(normTime >= 0.0f && normTime <= 1.0f, 0);
 	ASSERT(isValid(), 0);
 
-	if (numKeyframes == 1)
+	int index = numKeyframes - 1;
+	for (int i = 0; i < numKeyframes; i++)
 	{
-		return 0;
+		if (keyframes[i].time > normTime)
+			break;
+		index = i;
 	}
-
-	int index = 0;
-
-	if (numKeyframes > 16)
-	{
-		// Do a binary search to find the keyframe index
-		int min = 0;
-		int max = numKeyframes - 1;
-		int mid = (min + max) / 2;
-
-		while (min < max)
-		{
-			if (keyframes[mid].time > normTime)
-				max = mid - 1;
-			else if (keyframes[mid].time < normTime)
-				min = mid + 1;
-			else
-				break;
-
-			mid = (min + max) / 2;
-		}
-		index = mid;
-	}
-	else
-	{
-		// Do a linear search to find the keyframe index
-		for (int i = 0; i < numKeyframes; i++)
-		{
-			if (keyframes[i].time > normTime)
-			{
-				index = i - 1;
-				break;
-			}
-		}
-	}
-
 	return index;
 }
 
-void Pattern::getBoundingKeyframes(float normTime, int& keyframeIndex1, int& keyframeIndex2) const
+bool Pattern::getKeyframeAtTime(float normTime, int sampleDataIndex, Keyframe*& keyframe) const
 {
-	ASSERT(normTime >= 0.0f && normTime <= 1.0f,);
-	ASSERT(isValid(),);
+	ASSERT(normTime >= 0.0f && normTime <= 1.0f, 0);
+	ASSERT(isValid(), false);
 
-	if (numKeyframes == 1)
+	int start = perData_start[sampleDataIndex];
+	int end = perData_start[sampleDataIndex + 1];
+
+	if (end - start == 0)
+		return false;
+
+	int index;
+
+	if (end - start == 1)
+		index = start;
+	else
 	{
-		keyframeIndex1 = 0;
-		keyframeIndex2 = 0;
-		return;
+		index = end - 1;
+		for (int i = start; i < end; i++)
+		{
+			if (perData_keyframes[i]->time > normTime)
+				break;
+			index = i;
+		}
 	}
 
-	keyframeIndex1 = getKeyframeIndex(normTime);
-
-	if (keyframeIndex1 == numKeyframes - 1)
-		keyframeIndex2 = 0;
-	else keyframeIndex2 = keyframeIndex1 + 1;
+	keyframe = perData_keyframes[index];
+	return true;
 }
 
-bool Pattern::getBoundingKeyframes(float normTime, int sampleDataIndex, int& keyframeIndex1, int& keyframeIndex2) const
+bool Pattern::getBoundingKeyframes(float normTime, int sampleDataIndex, Keyframe*& keyframe1, Keyframe*& keyframe2) const
 {
 	ASSERT(normTime >= 0.0f && normTime <= 1.0f, false);
 	ASSERT(isValid(), false);
 
-	if (numKeyframes == 1)
-	{
-		if (keyframes[0].sample.hasValue(sampleDataIndex))
-		{
-			keyframeIndex1 = 0;
-			keyframeIndex2 = 0;
-			return true;
-		}
-		else
-		{
-			keyframeIndex1 = -1;
-			keyframeIndex2 = -1;
-			return false;
-		}
-	}
+	int start = perData_start[sampleDataIndex];
+	int end = perData_start[sampleDataIndex + 1];
 
-	keyframeIndex1 = -1;
-	keyframeIndex2 = -1;
-
-	for (int i = 0; i < numKeyframes; i++)
-	{
-		if (keyframes[i].sample.hasValue(sampleDataIndex))
-		{
-			if (keyframes[i].time > normTime)
-			{
-				keyframeIndex2 = i;
-				break;
-			}
-			else
-			{
-				keyframeIndex1 = i;
-
-				if (keyframeIndex2 == -1)
-					keyframeIndex2 = i;
-			}
-		}
-	}
-
-	if (keyframeIndex1 == -1)
-	{
+	if (end - start == 0)
 		return false;
+	else if (end - start == 1)
+	{
+		keyframe1 = keyframe2 = perData_keyframes[start];
+		return true;
+	}
+
+	int index = end - 1;
+
+	for (int i = start; i < end; i++)
+	{
+		if (perData_keyframes[i]->time > normTime)
+			break;
+		index = i;
+	}
+
+	keyframe1 = perData_keyframes[index];
+
+	if (index == end - 1)
+		keyframe2 = perData_keyframes[start];
+	else keyframe2 = perData_keyframes[index + 1];
+
+	return true;
+}
+
+bool Pattern::getBoundingRange(float normTime1, float normTime2, int sampleDataIndex, float &min, float &max) const
+{
+	ASSERT(normTime1 >= 0.0f && normTime1 <= 1.0f, false);
+	ASSERT(normTime2 >= 0.0f && normTime2 <= 1.0f, false);
+	ASSERT(isValid(), false);
+
+	min = 1.0f;
+	max = 0.0f;
+
+	int start = perData_start[sampleDataIndex];
+	int end = perData_start[sampleDataIndex + 1];
+
+	if (end - start == 0)
+		return false;
+	else if (end - start == 1)
+	{
+		min = max = perData_keyframes[start]->sample.getValue(sampleDataIndex);
+		return true;
+	}
+
+	int index1 = end - 1;
+	for (int i = start; i < end; i++)
+	{
+		if (perData_keyframes[i]->time > normTime1)
+			break;
+		index1 = i;
+	}
+
+	int index2 = start;
+	for (int i = end - 1; i >= start; i--)
+	{
+		if (perData_keyframes[i]->time < normTime2)
+			break;
+		index2 = i;
+	}
+
+	int index1_next;
+	if (index1 == end - 1)
+		index1_next = start;
+	else index1_next = index1 + 1;
+
+	float val = interpKeyframes(normTime1, sampleDataIndex, perData_keyframes[index1], perData_keyframes[index1_next]);
+	if (val < min) min = val;
+	if (val > max) max = val;
+
+	int index2_before;
+	if (index2 == start)
+		index2_before = end - 1;
+	else index2_before = index2 - 1;
+
+	val = interpKeyframes(normTime2, sampleDataIndex, perData_keyframes[index2_before], perData_keyframes[index2]);
+	if (val < min) min = val;
+	if (val > max) max = val;
+
+	int between_index = index1_next;
+	while(true)
+	{
+		if (between_index == end) // loop around
+			between_index = start;
+	
+		if (between_index == index2)
+			break;
+
+		val = perData_keyframes[between_index]->sample.getValue(sampleDataIndex);
+		if (val < min) min = val;
+		if (val > max) max = val;
+		between_index++;
 	}
 
 	return true;
 }
 
-void Pattern::getBoundingKeyframes(float normTime1, float normTime2, int& keyframeIndex1, int& keyframeIndex2) const
+BreathSample Pattern::getClosestSample(const BreathSample* target, float normTime1, float normTime2) const
 {
-	ASSERT(normTime1 >= 0.0f && normTime1 <= 1.0f,);
-	ASSERT(normTime2 >= 0.0f && normTime2 <= 1.0f,);
-	ASSERT(isValid(),);
-	
-	keyframeIndex1 = -1;
-	keyframeIndex2 = -1;
+	ASSERT(isValid(), BreathSample());
 
-	if (normTime1 == normTime2)
+	BreathSample result = BreathSample(-1, -1, -1, -1, -1);
+
+	for (int i = 0; i < BreathSample::NUM_VALUES; i++)
 	{
-		for (int i = 0; i < numKeyframes; i++)
+		float min;
+		float max;
+		if (getBoundingRange(normTime1, normTime2, i, min, max))
 		{
-			if (keyframes[i].time == normTime1)
-			{
-				keyframeIndex1 = i;
-				keyframeIndex2 = i;
-				return;
-			}
+			if (target->getValue(i) < min)
+				result.setValue(i, min);
+			else if (target->getValue(i) > max)
+				result.setValue(i, max);
+			else
+				result.setValue(i, target->getValue(i));
 		}
 	}
-	else if (normTime1 < normTime2)
-	{
-		for (int i = 0; i < numKeyframes; i++)
-		{
-			if (keyframes[i].time >= normTime1)
-			{
-				if (keyframes[i].time < normTime2)
-				{
-					if (keyframeIndex1 == -1)
-						keyframeIndex1 = keyframeIndex2 = i;
-					else keyframeIndex2++;
-				}
-				else return;
-			}
-		}
-	}
-	else
-	{
-		for (int i = 0; i < numKeyframes; i++)
-		{
-			if (keyframes[i].time < normTime2)
-			{
-				keyframeIndex2 = i;
-			}
-			else if (keyframes[i].time > normTime1)
-			{
-				if (keyframeIndex1 == -1)
-				{
-					keyframeIndex1 = i;
 
-					if (keyframeIndex2 != -1) return;
-				}
-
-				keyframeIndex2 = i;
-			}
-		}
-	}
+	return result;
 }
 
 bool Pattern::getInterpolatedValue(float normTime, int sampleDataIndex, float& value) const
@@ -394,31 +468,61 @@ bool Pattern::getInterpolatedValue(float normTime, int sampleDataIndex, float& v
 		}
 	}
 
-	int keyframeIndex1 = -1;
-	int keyframeIndex2 = -1;
+	Keyframe* keyframeIndex1;
+	Keyframe* keyframeIndex2;
 
 	if (!getBoundingKeyframes(normTime, sampleDataIndex, keyframeIndex1, keyframeIndex2))
 	{
 		return false;
 	}
 
-	if (keyframeIndex1 == keyframeIndex2)
+	// int keyframeIndex1_index = (int)(keyframeIndex1 - keyframes);
+	// int keyframeIndex2_index = (int)(keyframeIndex2 - keyframes);
+
+	value = interpKeyframes(normTime, sampleDataIndex, keyframeIndex1, keyframeIndex2);
+
+	return true;
+}
+
+float Pattern::interpKeyframes(float normTime, int sampleDataIndex, const Keyframe* keyframe1, const Keyframe* keyframe2)
+{
+	ASSERT(normTime >= 0.0f && normTime <= 1.0f, 0.0f);
+	ASSERT(keyframe1 != nullptr, 0.0f);
+	ASSERT(keyframe2 != nullptr, 0.0f);
+	ASSERT(keyframe1->sample.hasValue(sampleDataIndex), 0.0f);
+	ASSERT(keyframe2->sample.hasValue(sampleDataIndex), 0.0f);
+
+	// Override interpolation of constants
+	if (sampleDataIndex < BreathSample::NUM_CONSTANTS)
 	{
-		value = keyframes[keyframeIndex1].sample.getValue(sampleDataIndex);
-		return true;
+		return keyframe1->sample.getValue(sampleDataIndex);
 	}
 
-	float time1 = keyframes[keyframeIndex1].time;
-	float time2 = keyframes[keyframeIndex2].time;
+	if (keyframe1->time == keyframe2->time)
+	{
+		return keyframe2->sample.getValue(sampleDataIndex);
+	}
 
-	float value1 = keyframes[keyframeIndex1].sample.getValue(sampleDataIndex);
-	float value2 = keyframes[keyframeIndex2].sample.getValue(sampleDataIndex);
+	float time1 = keyframe1->time;
+	float time2 = keyframe2->time;
+
+	// Circular check (i.e., if the next keyframe is before the current keyframe)
+	if (time2 < time1)
+	{
+		time2 += 1.0f;
+
+		if (normTime < time1)
+		{
+			normTime += 1.0f;
+		}
+	}
+
+	float value1 = keyframe1->sample.getValue(sampleDataIndex);
+	float value2 = keyframe2->sample.getValue(sampleDataIndex);
 
 	float t = (normTime - time1) / (time2 - time1);
 
-	value = Interpolators::Interp(value1, value2, t, keyframes[keyframeIndex1].method);
-
-	return true;
+	return Interpolators::Interp(value1, value2, t, keyframe1->method);
 }
 
 bool Pattern::getBooleanValue(float normTime, int sampleDataIndex, bool& value) const
@@ -426,29 +530,16 @@ bool Pattern::getBooleanValue(float normTime, int sampleDataIndex, bool& value) 
 	ASSERT(normTime >= 0.0f && normTime <= 1.0f, false);
 	ASSERT(isValid(), false);
 
-	if (numKeyframes == 1)
+	Keyframe *keyframe;
+	if (getKeyframeAtTime(normTime, sampleDataIndex, keyframe))
 	{
-		if (keyframes[0].sample.hasValue(sampleDataIndex))
-		{
-			value = keyframes[0].sample.hasValue(sampleDataIndex);
-			return true;
-		}
-		else
-		{
-			return false;
-		}
-	}
-
-	int keyframeIndex = getKeyframeIndex(normTime);
-
-	ASSERT(keyframeIndex >= 0 && keyframeIndex < numKeyframes, false);
-
-	if (keyframes[keyframeIndex].sample.hasValue(sampleDataIndex))
-	{
-		value = keyframes[keyframeIndex].sample.getValue(sampleDataIndex) >= 0.5f;
+		value = keyframe->sample.getValue(sampleDataIndex) >= 0.5f;
 		return true;
 	}
-	else return false;
+	else
+	{
+		return false;
+	}
 }
 
 BreathSample Pattern::getTarget(float normTime, bool overrideConstants) const
@@ -457,6 +548,7 @@ BreathSample Pattern::getTarget(float normTime, bool overrideConstants) const
 	ASSERT(isValid(), BreathSample());
 
 	BreathSample sample;
+	// EDebug::Log("Pattern::getTarget: normTime = %f", normTime);
 
 	if (overrideConstants)
 	{
@@ -477,6 +569,7 @@ BreathSample Pattern::getTarget(float normTime, bool overrideConstants) const
 			if (getBooleanValue(normTime, i, bool_value))
 			{
 				sample.setValue(i, bool_value ? 1.0f : 0.0f);
+				// EDebug::Log("Pattern::getTarget: %d -> %s", i, bool_value ? "true" : "false");
 			}
 		}
 
@@ -486,6 +579,7 @@ BreathSample Pattern::getTarget(float normTime, bool overrideConstants) const
 			if (getInterpolatedValue(normTime, i, float_value))
 			{
 				sample.setValue(i, float_value);
+				// EDebug::Log("Pattern::getTarget: %d -> %.2f", i, float_value);
 			}
 		}
 	}
@@ -495,7 +589,7 @@ BreathSample Pattern::getTarget(float normTime, bool overrideConstants) const
 
 void Pattern::orderKeyframes()
 {
-	ASSERT(isValid(),);
+	ASSERT(numKeyframes > 0 && keyframes != nullptr && length > 0.0f,);
 
 	for (int i = 0; i < numKeyframes - 1; i++)
 	{
@@ -511,9 +605,53 @@ void Pattern::orderKeyframes()
 	}
 }
 
+void Pattern::calculatePerDataKeyframes()
+{
+	ASSERT(numKeyframes > 0 && keyframes != nullptr && length > 0.0f,);
+
+	if (perData_keyframes != nullptr)
+	{
+		EDebug::Warning("Pattern::calculatePerDataKeyframes: perData_keyframes != nullptr");
+		delete[] perData_keyframes;
+		perData_keyframes = nullptr;
+	}
+
+	std::vector<int> keyframeIndices;
+	perData_start = new int[BreathSample::NUM_VALUES + 1];
+	perData_start[0] = 0;
+	int sum = 0;
+
+	for (int dataIndex = 0; dataIndex < BreathSample::NUM_VALUES; dataIndex++)
+	{
+		for (int i = 0; i < numKeyframes; i++)
+		{
+			if (keyframes[i].sample.hasValue(dataIndex))
+			{
+				keyframeIndices.push_back(i);
+				sum++;
+			}
+		}
+
+		perData_start[dataIndex + 1] = sum;
+	}
+
+	perData_keyframes = new Keyframe*[sum];
+
+	for (int dataIndex = 0; dataIndex < BreathSample::NUM_VALUES; dataIndex++)
+	{
+		int start = perData_start[dataIndex];
+		int end = perData_start[dataIndex + 1];
+
+		for (int i = start; i < end; i++)
+		{
+			perData_keyframes[i] = &keyframes[keyframeIndices[i]];
+		}
+	}
+}
+
 void Pattern::applyHoldValues()
 {
-	ASSERT(isValid(),);
+	ASSERT(numKeyframes > 0 && keyframes != nullptr && length > 0.0f,);
 
 	for (int i = 0; i < numKeyframes; i++)
 	{

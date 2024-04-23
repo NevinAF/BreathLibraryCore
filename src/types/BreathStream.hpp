@@ -1,8 +1,8 @@
-#pragma once
+#ifndef BREATHSTREAM_H
+#define BREATHSTREAM_H
 
 #include "..\serialization\Serializable.hpp"
 #include "..\types\SimpleInterfaces.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\types\Behaviour.hpp"
 #include "..\serialization\ReferenceManager.hpp"
 
@@ -12,7 +12,7 @@
  * @brief Data class for holding and manipulating Aggregate Breath Samples.
  * Contains a samples for the most recent in-the-moment data. Implements a circular buffer for storing historical data.
  */
-class BreathStream : public IBreathSampler, Behaviour, Serializable
+class BreathStream : public Behaviour, public IBreathSampler
 {
 private:
 	/** The number of samples that can fit in the stream. This is the size of the buffer. */
@@ -28,12 +28,13 @@ private:
 	BreathSample* samples{ nullptr };
 
 	/** Number of breath samplers */
-	Ref<IBreathSampler> sampler{};
+	SamplerRef sampler{};
 
 protected:
 	/** Pushes a sample onto the end of the stream */
 	void update(float delta) override;
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
+	void initialize() override;
 
 public:
 	/**
@@ -61,15 +62,15 @@ public:
 	/** @return The latest sample in the stream. */
 	BreathSample *getLatestSample();
 
-	
-	BreathSample getSample() override;
+	BreathSample Sample() override;
 
 	SerializableProperties(
 		BreathStream,
-		BreathStream_serializedIndex,
 		"Breath Stream",
 		"Collection of breath samples from a sampler. Used for storing historical data to be used for analysis, like with session data. Can be used a sampler itself, always returning the latest sample.",
-		SerializedTypes::REF_SamplerStream)
+		ReferenceType::REF_Stream | ReferenceType::REF_Sampler | ReferenceType::REF_Behaviour)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 };
+
+#endif

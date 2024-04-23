@@ -1,12 +1,14 @@
+#ifndef RANGE_CORRELATOR_H
+#define RANGE_CORRELATOR_H
+
 #include "..\serialization\Serializable.hpp"
 #include "..\types\SimpleInterfaces.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\serialization\ReferenceManager.hpp"
 
-class RangeCorrelator : public ICorrelator, public Serializable
+class RangeCorrelator : public Serializable, public ICorrelator, public IBreathSampler
 {
 private:
-	Ref<IBreathSampler> sampler;
+	SamplerRef sampler;
 
 	bool useYes{true};
 	float yesLower{0};
@@ -28,18 +30,26 @@ private:
 	float pitchLower{0};
 	float pitchUpper{0};
 
+	double lastUpdate{0};
+	BreathSample lastSample{};
+	float lastCorrelation{0};
+
+	void updateSample();
+
 protected:
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 public:
 	SerializableProperties(
 		RangeCorrelator,
-		RangeCorrelator_serializedIndex,
 		"Range Correlator",
 		"Correlates a sampler based on if its values are within a range. Good for checking specific static values, such as user is breathing in.",
-		SerializedTypes::REF_Correlator)
+		ReferenceType::REF_Correlator | ReferenceType::REF_Sampler)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
-	float getCorrelation() override;
+	float Correlation() override;
+	BreathSample Sample() override;
 };
+
+#endif // RANGE_CORRELATOR_H

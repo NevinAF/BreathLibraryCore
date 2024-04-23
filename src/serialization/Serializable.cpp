@@ -1,123 +1,71 @@
-#include "pch.h"
 
 #include "Serializable.hpp"
-#include "ReferenceManager.hpp"
-#include "ClassDefinitions.hpp"
-
-using namespace SerializedTypes;
+#include "..\debugging\DebugCallbacks.hpp"
 
 
 void CanSerialize::initialize() {}
-void CanSerialize::addParameterDefinition(SerializedTypes::ClassDefinition *definition)
+void CanSerialize::addParameterDefinition(ClassDefinition *definition)
 {
 	EDebug::Error("CanSerialize::addParameterDefinition() called on base class. This must be overridden.");
 }
 
-SerializedTypes::ClassDefinition *Serializable::createClassDefinition()
+ClassDefinition *Serializable::createClassDefinition()
 {
 	EDebug::Error("Serializable::createClassDefinition() called on base class. This must be overridden.");
 	return nullptr;
 };
 
 
-void Serializable::setParameters(unsigned char* values, UInt32 length, UInt32* references)
+void Serializable::setParameters(unsigned char* values, unsigned char *&runtimeData)
 {
-	unsigned char* end = values + length;
-
-	ClassDefinition *classDef = nullptr;
-	const Parameter *param = nullptr;
-
-	if (ClassDefinitions::definitions != nullptr)
-	{
-		ASSERT(getSerializedClassIndex() < NUMBER_OF_SERIALIZABLE_CLASSES,)
-		classDef = ClassDefinitions::definitions[getSerializedClassIndex()];
-
-		const Parameter *param = classDef->params;
-		ASSERT(param != nullptr,);
-	}
-
 	UInt16 paramIndex = 0;
+	UInt16 pi = 0;
 
-	while (values < end)
+	while (pi != 0xFFFF)
 	{
-		Type type = (Type)*values;
-		values++;
+		pi = paramIndex;
+		setParameterIndex(pi, values, runtimeData);
 
-		if (classDef != nullptr)
-		{
-			ASSERT(paramIndex < classDef->numParams && type == param[paramIndex].type,);
-
-			validateParameter(param + paramIndex, values);
-		}
-
-		UInt16 pi = paramIndex;
-		setParameterIndex(pi, values, references);
-
-		ASSERT(pi > paramIndex,)
+		ASSERT_MSG(pi > paramIndex,, "Set Parameters found index out of bounds! Class definition or serialization is not set up properly.")
 
 		paramIndex++;
 	}
 }
 
-int Serializable::setData(Type type, void *&target, unsigned char *data, UInt32*& references)
-{
-	switch (type)
-	{
-	case Type::Float:
-		return setFloat(*(float*)target, data);
-	case Type::Int:
-		return setInt(*(SInt32*)target, data);
-	case Type::Bool:
-		return setBool(*(bool*)target, data);
-	case Type::Enum:
-		return setEnum(*(UInt32*)target, data);
-	case Type::Flags:
-		return setFlags(*(UInt32*)target, data);
-	case Type::String:
-		return setString(*(char**)target, data);
-	case Type::Array:
-		return setArray(target, data, references);
-	case Type::Reference:
-		return (*(Ref<Serializable>*)target).id = *references++;
-	default:
-		break;
-	}
-}
-
-int Serializable::setFloat(float& target, unsigned char* data)
+void Serializable::setFloat(float& target, unsigned char* &data)
 {
 	target = *(float*)data;
-	return sizeof(float);
+	data += sizeof(float);
 }
 
-int Serializable::setInt(SInt32& target, unsigned char* data)
+void Serializable::setInt(SInt32& target, unsigned char* &data)
 {
 	target = *(SInt32*)data;
-	return sizeof(SInt32);
+	data += sizeof(SInt32);
 }
 
-int Serializable::setBool(bool& target, unsigned char* data)
+void Serializable::setBool(bool& target, unsigned char* &data)
 {
 	target = *(bool*)data;
-	return sizeof(bool);
+	data += sizeof(bool);
 }
 
-int Serializable::setEnum(UInt32& target, unsigned char* data)
+void Serializable::setEnum(UInt32& target, unsigned char* &data)
 {
 	target = *(UInt8*)data;
-	return sizeof(UInt8);
+	data += sizeof(UInt8);
 }
 
-int Serializable::setFlags(UInt32& target, unsigned char* data)
+void Serializable::setFlags(UInt32& target, unsigned char* &data)
 {
 	target = *(UInt32*)data;
-	return sizeof(UInt32);
+	data += sizeof(UInt32);
 }
 
-int Serializable::setString(char*& target, unsigned char* data)
+void Serializable::setString(char*& target, unsigned char* &data)
 {
-	UInt32 size = *(UInt32*)data;
-	data += sizeof(UInt32);
+	UInt16 size = *(UInt16*)data;
+	data += sizeof(UInt16);
 
 	if (target != nullptr)
 		delete[] target;
@@ -126,70 +74,86 @@ int Serializable::setString(char*& target, unsigned char* data)
 	memcpy(target, data, size);
 	target[size] = 0;
 
-	return sizeof(UInt32) + size;
+	data += size;
 }
 
-int Serializable::setArray(void*& target, unsigned char* data, UInt32*& references)
+void Serializable::setArray_RuntimeBytes(unsigned char*& target, UInt32& target_size, unsigned char* &data)
 {
-	UInt32 size = *(UInt32*)data;
+	target_size = *(UInt32*)data;
 	data += sizeof(UInt32);
-	unsigned char* end = data + size;
 
 	if (target != nullptr)
 		delete[] target;
 
-	unsigned char *buffer = new unsigned char[size];
-	UInt32 dataLen = 0;
+	target = new unsigned char[target_size];
+	memcpy(target, data, target_size);
 
-	while (data < end)
-	{
-		Type type = (Type)*data;
-		data++;
-
-		UInt32 dataSize = setData(type, target, data, references);
-		data += dataSize;
-		dataLen += dataSize;
-	}
-
-	target = new char[dataLen];
-	memcpy(target, data, dataLen);
-
-	return sizeof(UInt32) + size;
+	data += target_size;
 }
 
-void Serializable::validateParameter(const Parameter *param, unsigned char *value)
+// int Serializable::setArray(void*& target, unsigned char* data, UInt32*& references)
+// {
+// 	UInt32 size = *(UInt32*)data;
+// 	data += sizeof(UInt32);
+// 	unsigned char* end = data + size;
+
+// 	if (target != nullptr)
+// 		delete[] target;
+
+// 	unsigned char *buffer = new unsigned char[size];
+// 	UInt32 dataLen = 0;
+
+// 	while (data < end)
+// 	{
+// 		ValueType type = (ValueType)*data;
+// 		data++;
+
+// 		UInt32 dataSize = setData(type, target, data, references);
+// 		data += dataSize;
+// 		dataLen += dataSize;
+// 	}
+
+// 	target = new char[dataLen];
+// 	memcpy(target, data, dataLen);
+
+// 	return sizeof(UInt32) + size;
+// }
+
+void Serializable::validateParameter(const ParameterDefinition *param, unsigned char *value)
 {
 	ASSERT(param != nullptr,)
 
+	// EDebug::Warning("Validating parameter of type %d", param->type);
+
 	switch (param->type)
 	{
-	case Type::Float:
+	case ValueType::Float:
 		validateFloatParameter(param, *(float*)value);
 		break;
-	case Type::Int:
+	case ValueType::Int:
 		validateIntParameter(param, *(SInt32*)value);
 		break;
-	case Type::Bool:
+	case ValueType::Bool:
 		validateBoolParameter(param, *(bool*)value);
 		break;
-	case Type::Enum:
+	case ValueType::Enum:
 		validateEnumParameter(param, *(UInt8*)value);
 		break;
-	case Type::Flags:
+	case ValueType::Flags:
 		validateFlagsParameter(param, *(UInt32*)value);
 		break;
-	case Type::String:
+	case ValueType::String:
 		validateStringParameter(param, value);
 		break;
-	case Type::Array:
+	case ValueType::Array:
 		validateArrayParameter(param, value);
 		break;
 	}
 }
 
-void Serializable::validateFloatParameter(const Parameter *param, float& value)
+void Serializable::validateFloatParameter(const ParameterDefinition *param, float& value)
 {
-	ASSERT(param != nullptr && param->type == Type::Float,)
+	ASSERT(param != nullptr && param->type == ValueType::Float,)
 
 	float min = *(float*)&param->data0;
 	float max = *(float*)&param->data1;
@@ -201,9 +165,9 @@ void Serializable::validateFloatParameter(const Parameter *param, float& value)
 		value = max;
 }
 
-void Serializable::validateIntParameter(const Parameter *param, SInt32& value)
+void Serializable::validateIntParameter(const ParameterDefinition *param, SInt32& value)
 {
-	ASSERT(param != nullptr && param->type == Type::Int,)
+	ASSERT(param != nullptr && param->type == ValueType::Int,)
 
 	SInt32 min = *(SInt32*)&param->data0;
 	SInt32 max = *(SInt32*)&param->data1;
@@ -215,46 +179,57 @@ void Serializable::validateIntParameter(const Parameter *param, SInt32& value)
 		value = max;
 }
 
-void Serializable::validateBoolParameter(const Parameter *param, bool& value)
+void Serializable::validateBoolParameter(const ParameterDefinition *param, bool& value)
 {
-	ASSERT(param != nullptr && param->type == Type::Bool,);
+	ASSERT(param != nullptr && param->type == ValueType::Bool,);
 
 	value = value != 0;
 }
 
-void Serializable::validateEnumParameter(const Parameter *param, UInt8& value)
+void Serializable::validateEnumParameter(const ParameterDefinition *param, UInt8& value)
 {
-	ASSERT(param != nullptr && param->type == Type::Enum,);
+	ASSERT(param != nullptr && param->type == ValueType::Enum,);
+
+	// EDebug::Warning("Validating enum, %p, %d", &value, param->data0);
 
 	UInt8 numOptions = (UInt8)param->data0;
 	if (value >= numOptions)
 		value = numOptions - 1;
 }
 
-void Serializable::validateFlagsParameter(const Parameter *param, UInt32& value)
+void Serializable::validateFlagsParameter(const ParameterDefinition *param, UInt32& value)
 {
-	ASSERT(param != nullptr && param->type == Type::Flags,);
+	ASSERT(param != nullptr && param->type == ValueType::Flags,);
 
 	UInt32 numOptions = param->data0;
 	if (value >= numOptions)
 		value = numOptions - 1;
 }
 
-void Serializable::validateStringParameter(const Parameter *param, unsigned char* value)
+void Serializable::validateStringParameter(const ParameterDefinition *param, unsigned char* value)
 {
-	ASSERT(param != nullptr && param->type == Type::String,);
+	ASSERT(param != nullptr && param->type == ValueType::String,);
 }
 
-void Serializable::validateArrayParameter(const Parameter *param, unsigned char* value)
+void Serializable::validateArrayParameter(const ParameterDefinition *param, unsigned char* value)
 {
-	ASSERT(param != nullptr && param->type == Type::Array,);
+	ASSERT(param != nullptr && param->type == ValueType::Array,);
 
-	Type type = (Type)param->data0;
+	// ValueType type = (ValueType)param->data0;
 
 	// Todo: Maybe some validation on the size/data in the array?
 }
 
-void Serializable::validateReferenceParameter(const Parameter *param, const void *value)
+void Serializable::validateReferenceParameter(const ParameterDefinition *param, const void *value)
 {
-	ASSERT(param != nullptr && param->type == Type::Reference,);
+	ASSERT(param != nullptr && param->type == ValueType::Reference,);
+}
+
+BreathSample Serializable::Sample() {
+	EDebug::Warning("Serializable::Sample has not been defined on an object being used as a BreathSampler. This is likely a bug.");
+	return BreathSample();
+}
+float Serializable::Correlation() {
+	EDebug::Warning("Serializable::Correlation has not been defined on an object being used as a Correlator. This is likely a bug.");
+	return -1.0f;
 }

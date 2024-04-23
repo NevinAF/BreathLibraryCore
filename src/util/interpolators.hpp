@@ -1,4 +1,5 @@
-#pragma once
+#ifndef INTERPOLATORS_H
+#define INTERPOLATORS_H
 
 namespace Interpolators
 {
@@ -26,6 +27,9 @@ namespace Interpolators
 	float Interp(float start, float end, float time, Method method);
 	float Interp(float time, Method method);
 
+	float IInterp(float start, float end, float value, Method method);
+	float IInterp(float value, Method method);
+
 	float fun_Constant(float start, float end, float time);
 	float fun_IConstant(float start, float end, float value);
 
@@ -43,4 +47,9 @@ namespace Interpolators
 
 	float fun_SquareRoot(float start, float end, float time);
 	float fun_ISquareRoot(float start, float end, float value);
+
+	Method parseMethod(const char* method);
+	bool tryParseMethod(const char* method, Method& outMethod);
 };
+
+#endif // INTERPOLATORS_H

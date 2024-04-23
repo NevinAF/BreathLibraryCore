@@ -1,30 +1,30 @@
-#pragma once
+#ifndef TESTING_DETECTOR_HPP
+#define TESTING_DETECTOR_HPP
 
 #include "..\serialization\Serializable.hpp"
 #include "..\types\SimpleInterfaces.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\types\Behaviour.hpp"
 
-class TestingDetector : public IBreathSampler, public Serializable, Behaviour
+class TestingDetector : public Behaviour, public IBreathSampler
 {
 private:
 	float currentTime{};
 
 protected:
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 public:
 	SerializableProperties(
 		TestingDetector,
-		TestingDetector_serializedIndex,
 		"Testing Detector",
 		"Testing detector which returns specific values based on current time. Used for testing.",
-		SerializedTypes::REF_Sampler)
+		ReferenceType::REF_Sampler | ReferenceType::REF_Behaviour)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
+	virtual ~TestingDetector() = default;
 	void update(float delta) override;
-	BreathSample getSample() override;
+	BreathSample Sample() override;
 };
 
-
+#endif // TESTING_DETECTOR_HPP

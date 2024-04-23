@@ -1,12 +1,14 @@
-#pragma once
+#ifndef BEHAVIOUR_H
+#define BEHAVIOUR_H
 
 #include "..\serialization\Serializable.hpp"
 #include "..\util\Timer.hpp"
+#include <functional>
 
 /**
  * @brief A class that can sample breath data. Usually used for creating a BreathStream.
  */
-class Behaviour : protected CanSerialize
+class Behaviour : public Serializable
 {
 private:
 	enum class UpdateMode
@@ -33,14 +35,25 @@ protected:
 
 	void demandUpdate();
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 	void initialize() override;
-
-	/** @return The sampling period of the sampler. */
 	virtual void update(float delta);
 
+	virtual ~Behaviour();
+
 public:
+	// Inline as this will be compiled out in release builds
+	inline void managedUpdate(float delta)
+	{
+		ASSERT_MSG(updateMode == Behaviour::UpdateMode::Fixed_Managed ||
+			updateMode == Behaviour::UpdateMode::Dynamic_Managed, ,
+			"Trying to update native object with a non managed update mode. RefId: %d", updateMode)
+		update(delta);
+	}
+	int getUpdateMode() const { return (int)updateMode; }
 };
+
+#endif // BEHAVIOUR_H

@@ -1,32 +1,46 @@
-#pragma once
+#ifndef MERGESAMPLER_H
+#define MERGESAMPLER_H
 
 #include "..\serialization\Serializable.hpp"
+#include "..\serialization\ReferenceManager.hpp"
 #include "..\types\SimpleInterfaces.hpp"
-#include "..\serialization\ClassDefinitions.hpp"
 #include "..\types\Behaviour.hpp"
 
-class MergeSampler : public IBreathSampler, public Serializable, Behaviour
+class MergeSampler : public Behaviour, public IBreathSampler
 {
 private:
-	IBreathSampler *samplers{nullptr};
+	float blend_weight{0.5f};
+	
+	SamplerRef sampler_a{};
+	bool use_a_yes{true};
+	bool use_a_in{true};
+	bool use_a_nasal{true};
+	bool use_a_volume{true};
+	bool use_a_pitch{true};
+
+	SamplerRef sampler_b{};
+	bool use_b_yes{true};
+	bool use_b_in{true};
+	bool use_b_nasal{true};
+	bool use_b_volume{true};
+	bool use_b_pitch{true};
 
 	BreathSample currentSample{};
 
 protected:
-	void setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references) override;
+	void setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData) override;
 
 public:
 	SerializableProperties(
 		MergeSampler,
-		MergerSampler_serializedIndex,
 		"Merge Sampler",
 		"Takes one or more samplers and merges them into one. Useful for combining multiple detectors into one with all of the best features.",
-		SerializedTypes::REF_Sampler)
+		ReferenceType::REF_Sampler | ReferenceType::REF_Behaviour)
 
-	static void addParameterDefinition(SerializedTypes::ClassDefinition *definition);
+	static void addParameterDefinition(ClassDefinition *definition);
 
 	void update(float delta) override;
-	BreathSample getSample() override;
+	BreathSample Sample() override;
 };
 
-
+#endif // MERGESAMPLER_H

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BREATH_SAMPLE_H
+#define BREATH_SAMPLE_H
 
 #include "..\util\interpolators.hpp"
 
@@ -93,4 +94,8 @@ struct BreathSample
 	static BreathSample ClosestValues_val(const BreathSample& a, const BreathSample* samples, int size);
 
 	static BreathSample ClosestValues_ptr(const BreathSample& a, const BreathSample* *samples, int size);
+
+	float ClosedValue(float value, float min, float max) const;
 };
+
+#endif

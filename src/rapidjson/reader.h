@@ -78,21 +78,6 @@ RAPIDJSON_DIAG_OFF(effc++)
     caller to explicitly check the \ref rapidjson::GenericReader::Parse's
     return value:
 
-    \code
-    #define RAPIDJSON_PARSE_ERROR_NORETURN(parseErrorCode,offset) \
-       throw ParseException(parseErrorCode, #parseErrorCode, offset)
-
-    #include <stdexcept>               // std::runtime_error
-    #include "rapidjson/error/error.h" // rapidjson::ParseResult
-
-    struct ParseException : std::runtime_error, rapidjson::ParseResult {
-      ParseException(rapidjson::ParseErrorCode code, const char* msg, size_t offset)
-        : std::runtime_error(msg), ParseResult(code, offset) {}
-    };
-
-    #include "rapidjson/reader.h"
-    \endcode
-
     \see RAPIDJSON_PARSE_ERROR, rapidjson::GenericReader::Parse
  */
 #ifndef RAPIDJSON_PARSE_ERROR_NORETURN

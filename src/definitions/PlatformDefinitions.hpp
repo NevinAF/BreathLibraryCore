@@ -1,3 +1,6 @@
+#ifndef PLATFORM_DEFINITIONS_H
+#define PLATFORM_DEFINITIONS_H
+
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(_WIN64)
 #   define PLATFORM_WIN 1
 #   if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
@@ -41,8 +44,14 @@
 // that uses this DLL. This way any other project whose source files include this file see
 // BREATHLIBRARYCORE_API functions as being imported from a DLL, whereas this DLL sees symbols
 // defined with this macro as being exported.
-#ifdef BREATHLIBRARYCORE_EXPORTS
-#define BREATHLIBRARYCORE_API __declspec(dllexport)
+#if PLATFORM_WIN == 1
+    #if defined DLL_EXPORTS
+        #define BREATHLIBRARYCORE_API __declspec(dllexport)
+    #else
+        #define BREATHLIBRARYCORE_API __declspec(dllimport)
+    #endif
 #else
-#define BREATHLIBRARYCORE_API __declspec(dllimport)
+    #define BREATHLIBRARYCORE_API
+#endif
+
 #endif

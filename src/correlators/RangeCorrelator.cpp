@@ -1,70 +1,94 @@
-#include "pch.h"
 
 #include "RangeCorrelator.hpp"
+#include "..\debugging\DebugCallbacks.hpp"
+#include "..\util\Timer.hpp"
 
 CreateSerializable(RangeCorrelator);
 
-float RangeCorrelator::getCorrelation()
+float RangeCorrelator::Correlation()
 {
-	BreathSample rangeSample;
-	BreathSample samplerSample = sampler.get()->getSample();
+	updateSample();
+
+	return lastCorrelation;
+}
+
+BreathSample RangeCorrelator::Sample()
+{
+	updateSample();
+
+	return lastSample;
+}
+
+void RangeCorrelator::updateSample()
+{
+	double currentTime = Timer::getTime();
+	if (lastUpdate > currentTime - 0.02)
+		return;
+	lastUpdate = currentTime;
+
+	BreathSample samplerSample = sampler.Sample();
 
 	if (useYes && samplerSample.hasYes())
 	{
 		if (samplerSample.getYes() < yesLower)
-			rangeSample.setYes(yesLower);
+			lastSample.setYes(yesLower);
 		else if (samplerSample.getYes() > yesUpper)
-			rangeSample.setYes(yesUpper);
+			lastSample.setYes(yesUpper);
 		else
-			rangeSample.setYes(samplerSample.getYes());
+			lastSample.setYes(samplerSample.getYes());
 	}
+	else lastSample.setYes(-1.0f);
 
 	if (useIn && samplerSample.hasIn())
 	{
 		if (samplerSample.getIn() < inLower)
-			rangeSample.setIn(inLower);
+			lastSample.setIn(inLower);
 		else if (samplerSample.getIn() > inUpper)
-			rangeSample.setIn(inUpper);
+			lastSample.setIn(inUpper);
 		else
-			rangeSample.setIn(samplerSample.getIn());
+			lastSample.setIn(samplerSample.getIn());
 	}
+	else lastSample.setIn(-1.0f);
 
 	if (useNasal && samplerSample.hasNasal())
 	{
 		if (samplerSample.getNasal() < nasalLower)
-			rangeSample.setNasal(nasalLower);
+			lastSample.setNasal(nasalLower);
 		else if (samplerSample.getNasal() > nasalUpper)
-			rangeSample.setNasal(nasalUpper);
+			lastSample.setNasal(nasalUpper);
 		else
-			rangeSample.setNasal(samplerSample.getNasal());
+			lastSample.setNasal(samplerSample.getNasal());
 	}
+	else lastSample.setNasal(-1.0f);
 
 	if (useVolume && samplerSample.hasVolume())
 	{
 		if (samplerSample.getVolume() < volumeLower)
-			rangeSample.setVolume(volumeLower);
+			lastSample.setVolume(volumeLower);
 		else if (samplerSample.getVolume() > volumeUpper)
-			rangeSample.setVolume(volumeUpper);
+			lastSample.setVolume(volumeUpper);
 		else
-			rangeSample.setVolume(samplerSample.getVolume());
+			lastSample.setVolume(samplerSample.getVolume());
 	}
+	else lastSample.setVolume(-1.0f);
 
 	if (usePitch && samplerSample.hasPitch())
 	{
 		if (samplerSample.getPitch() < pitchLower)
-			rangeSample.setPitch(pitchLower);
+			lastSample.setPitch(pitchLower);
 		else if (samplerSample.getPitch() > pitchUpper)
-			rangeSample.setPitch(pitchUpper);
+			lastSample.setPitch(pitchUpper);
 		else
-			rangeSample.setPitch(samplerSample.getPitch());
+			lastSample.setPitch(samplerSample.getPitch());
 	}
+	else lastSample.setPitch(-1.0f);
 
-	return BreathSample::Likeness(rangeSample, samplerSample);
+	lastCorrelation = BreathSample::Likeness(lastSample, samplerSample);
 }
 
-void RangeCorrelator::addParameterDefinition(SerializedTypes::ClassDefinition *definition)
+void RangeCorrelator::addParameterDefinition(ClassDefinition *definition)
 {
-	definition->addReferenceDefinition("Sampler", "The sampler to correlate to the ranges.", SerializedTypes::REF_Sampler);
+	definition->addReferenceDefinition("Sampler", "The sampler to correlate to the ranges.", ReferenceType::REF_Sampler);
 	definition->addBoolDefinition("Use Yes", "Whether to use the yes range.", true);
 	definition->addFloatDefinition("Yes Lower", "The lower bound of the yes range.", 0.0f, 0.0f, 1.0f);
 	definition->addFloatDefinition("Yes Upper", "The upper bound of the yes range.", 1.0f, 0.0f, 1.0f);
@@ -82,22 +106,22 @@ void RangeCorrelator::addParameterDefinition(SerializedTypes::ClassDefinition *d
 	definition->addFloatDefinition("Pitch Upper", "The upper bound of the pitch range.", 1.0f, 0.0f, 1.0f);
 }
 
-void RangeCorrelator::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void RangeCorrelator::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	SetReference(sampler);
-	SetBool(useYes);
-	SetFloat(yesLower);
-	SetFloat(yesUpper);
-	SetBool(useIn);
-	SetFloat(inLower);
-	SetFloat(inUpper);
-	SetBool(useNasal);
-	SetFloat(nasalLower);
-	SetFloat(nasalUpper);
-	SetBool(useVolume);
-	SetFloat(volumeLower);
-	SetFloat(volumeUpper);
-	SetBool(usePitch);
-	SetFloat(pitchLower);
-	SetFloat(pitchUpper);
+	serializable_SetReference(sampler);
+	serializable_SetBool(useYes);
+	serializable_SetFloat(yesLower);
+	serializable_SetFloat(yesUpper);
+	serializable_SetBool(useIn);
+	serializable_SetFloat(inLower);
+	serializable_SetFloat(inUpper);
+	serializable_SetBool(useNasal);
+	serializable_SetFloat(nasalLower);
+	serializable_SetFloat(nasalUpper);
+	serializable_SetBool(useVolume);
+	serializable_SetFloat(volumeLower);
+	serializable_SetFloat(volumeUpper);
+	serializable_SetBool(usePitch);
+	serializable_SetFloat(pitchLower);
+	serializable_SetFloat(pitchUpper);
 }

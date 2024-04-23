@@ -1,8 +1,6 @@
-#include "pch.h"
 
 #include "SyncedPatternCorrelator.hpp"
 #include "..\debugging\DebugCallbacks.hpp"
-#include "..\serialization\EnumDefinitions.hpp"
 
 CreateSerializable(SyncedPatternCorrelator);
 
@@ -10,7 +8,6 @@ void SyncedPatternCorrelator::setComparingSample(const BreathSample& samplerSamp
 {
 	if (pattern->getNumKeyframes() == 0)
 	{
-		EDebug::Error("SyncedPatternCorrelator::update() - Pattern has no keyframes");
 		return;
 	}
 	
@@ -25,6 +22,7 @@ void SyncedPatternCorrelator::setComparingSample(const BreathSample& samplerSamp
 		return;
 	}
 
+
 	if (absMatchRange_before + absMatchRange_after == 0)
 	{
 		comparingSample = pattern->getTarget(patternTime);
@@ -36,8 +34,8 @@ void SyncedPatternCorrelator::setComparingSample(const BreathSample& samplerSamp
 
 	if (absMatchRange_before + absMatchRange_after >= pattern->getLength())
 	{
-		float minTime = 0;
-		float maxTime = 1;
+		minTime = 0;
+		maxTime = 1;
 	}
 	else
 	{
@@ -54,17 +52,7 @@ void SyncedPatternCorrelator::setComparingSample(const BreathSample& samplerSamp
 		}
 	}
 
-	int lowerBound;
-	int upperBound;
-	pattern->getBoundingKeyframes(minTime, maxTime, lowerBound, upperBound);
-
-	ASSERT(lowerBound >= 0 && lowerBound < pattern->getNumKeyframes(),);
-	ASSERT(upperBound >= 0 && upperBound < pattern->getNumKeyframes(),);
-
-	comparingSample = BreathSample::ClosestValues_ptr(
-		samplerSample,
-		pattern->getSamples() + lowerBound,
-		upperBound - lowerBound + 1);
+	comparingSample = pattern->getClosestSample(&samplerSample, minTime, maxTime);
 }
 
 bool SyncedPatternCorrelator::isHolding() const
@@ -74,8 +62,11 @@ bool SyncedPatternCorrelator::isHolding() const
 
 bool SyncedPatternCorrelator::_setComparingSample_HoldCheck(float delta)
 {
-	int holdKeyIndex = pattern->getKeyframeIndex(patternTime);
+	int holdKeyIndex = pattern->getKeyframeIndexAtTime(patternTime);
 	
+	// EDebug::Log("Got key: %d", holdKeyIndex);
+
+
 	if (pattern->getKeyframes()[holdKeyIndex].method != Interpolators::Hold)
 	{
 		ASSERT(_holdTime < 0, false);
@@ -85,7 +76,7 @@ bool SyncedPatternCorrelator::_setComparingSample_HoldCheck(float delta)
 	int nextKeyIndex = (holdKeyIndex + 1) % pattern->getNumKeyframes();
 
 	float holdLikeness = BreathSample::Likeness(
-		sampler->getSample(),
+		sampler.Sample(),
 		pattern->getKeyframes()[holdKeyIndex].sample);
 
 	if (holdLikeness < holdThreshold)
@@ -97,7 +88,7 @@ bool SyncedPatternCorrelator::_setComparingSample_HoldCheck(float delta)
 	}
 
 	float nextKeyLikeness = BreathSample::Likeness(
-		sampler->getSample(),
+		sampler.Sample(),
 		pattern->getKeyframes()[nextKeyIndex].sample);
 
 	if (nextKeyLikeness >= holdLikeness)
@@ -142,13 +133,9 @@ void SyncedPatternCorrelator::setPatternTimeByMode(float delta)
 void SyncedPatternCorrelator::update(float delta)
 {
 	pattern = pattern_ref.get();
-	sampler = sampler_ref.get();
 
-	if (sampler == nullptr || pattern == nullptr)
-	{
-		EDebug::Error("SyncedPatternCorrelator::update() - Sampler or pattern is null");
-		return;
-	}
+	ASSERT_MSG(sampler.id != 0xFFFFFFFF,, "SyncedPatternCorrelator::update: sampler is null!");
+	ASSERT_MSG(pattern != nullptr,, "SyncedPatternCorrelator::update: pattern is null!");
 
 	if (delta >= 1)
 	{
@@ -164,25 +151,29 @@ void SyncedPatternCorrelator::update(float delta)
 	}
 #endif
 
-	BreathSample samplerSample = sampler->getSample();
+
+	BreathSample samplerSample = sampler.Sample();
+
 	setComparingSample(samplerSample, delta);
 
 	comparingCorrelation = BreathSample::Likeness(samplerSample, comparingSample);
+
+	setPatternTimeByMode(delta);
 }
 
-void SyncedPatternCorrelator::addParameterDefinition(SerializedTypes::ClassDefinition *definition)
+void SyncedPatternCorrelator::addParameterDefinition(ClassDefinition *definition)
 {
 	Behaviour::addParameterDefinition(definition);
 
 	definition->addReferenceDefinition(
 		"Breath Sampler",
 		"Sampler to use for the correlator. The pattern will try to match it's own time based on the breath sampler.",
-		SerializedTypes::REF_Sampler);
+		ReferenceType::REF_Sampler);
 
 	definition->addReferenceDefinition(
 		"Pattern",
 		"Pattern to use for the correlator.",
-		SerializedTypes::REF_Pattern);
+		ReferenceType::REF_Pattern);
 
 	definition->addEnumDefinition(
 		"Pattern Time Mode",
@@ -196,7 +187,7 @@ void SyncedPatternCorrelator::addParameterDefinition(SerializedTypes::ClassDefin
 		0.0f,
 		0.0f,
 		1.0f,
-		SerializedTypes::PAR_ReadOnlyWhilePlaying);
+		ParameterFlags::PAR_ReadOnlyWhilePlaying);
 
 	definition->addFloatDefinition(
 		"Match Seconds Before",
@@ -227,26 +218,27 @@ void SyncedPatternCorrelator::addParameterDefinition(SerializedTypes::ClassDefin
 		1.0f);
 }
 
-void SyncedPatternCorrelator::setParameterIndex(UInt16& paramIndex, unsigned char*& data, UInt32*& references)
+void SyncedPatternCorrelator::setParameterIndex(UInt16 &paramIndex, unsigned char *&savedData, unsigned char *&runtimeData)
 {
-	Behaviour::setParameterIndex(paramIndex, data, references);
+	Behaviour::setParameterIndex(paramIndex, savedData, runtimeData);
 
-	SetReference(sampler_ref);
-	SetReference(pattern_ref);
-	SetFloat(patternTime);
-	SetFloat(absMatchRange_before);
-	SetFloat(absMatchRange_after);
-	SetFloat(holdThreshold);
-	SetFloat(nextThreshold);
+	serializable_SetReference(sampler);
+	serializable_SetReference(pattern_ref);
+	serializable_SetEnum(progressMode);
+	serializable_SetFloat(patternTime);
+	serializable_SetFloat(absMatchRange_before);
+	serializable_SetFloat(absMatchRange_after);
+	serializable_SetFloat(holdThreshold);
+	serializable_SetFloat(nextThreshold);
 }
 
-float SyncedPatternCorrelator::getCorrelation()
+float SyncedPatternCorrelator::Correlation()
 {
 	demandUpdate();
 	return comparingCorrelation;
 }
 
-BreathSample SyncedPatternCorrelator::getSample()
+BreathSample SyncedPatternCorrelator::Sample()
 {
 	demandUpdate();
 	return comparingSample;

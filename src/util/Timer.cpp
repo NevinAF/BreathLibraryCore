@@ -1,9 +1,8 @@
-#include "pch.h"
-
 #include "Timer.hpp"
+#include "../definitions/PlatformDefinitions.hpp"
 #include <ctime>
 
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
 #include <Windows.h>
 #else
 #include <unistd.h>
@@ -49,7 +48,11 @@ void Timer::beginUpdateCycle(unsigned long updatePeriod)
 	double lastTime = getTime();
 	while (updateCycleRunning)
 	{
+#ifdef PLATFORM_WIN
 		Sleep(updatePeriod);
+#else
+		usleep(updatePeriod * 1000);
+#endif
 		double currentTime = getTime();
 
 		for (auto it = updateFunctions.begin(); it != updateFunctions.end(); it++)
@@ -64,4 +67,9 @@ void Timer::beginUpdateCycle(unsigned long updatePeriod)
 void Timer::endUpdateCycle()
 {
 	updateCycleRunning = false;
+}
+
+unsigned long long Timer::getUnixSeconds()
+{
+	return time(NULL);
 }
